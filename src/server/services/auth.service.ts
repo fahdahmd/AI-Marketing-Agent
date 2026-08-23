@@ -15,7 +15,11 @@ export const signupSchema = z.object({
 export type SignupInput = z.infer<typeof signupSchema>;
 
 export async function registerUser(input: SignupInput) {
-  const data = signupSchema.parse(input);
+  const parsed = signupSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.errors[0]?.message ?? "Invalid input", parsed.error);
+  }
+  const data = parsed.data;
   const email = data.email.toLowerCase();
 
   const existing = await db.user.findUnique({ where: { email } });
