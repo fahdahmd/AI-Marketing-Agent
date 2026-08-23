@@ -5,6 +5,10 @@ const nextConfig = {
       { protocol: "https", hostname: "**" },
       { protocol: "http", hostname: "localhost" },
     ],
+    // Only mock-generated placeholder creatives are SVG; real providers return raster images.
+    dangerouslyAllowSVG: true,
+    contentDispositionType: "attachment",
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   experimental: {
     serverActions: {
