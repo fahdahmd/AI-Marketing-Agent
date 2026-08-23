@@ -11,15 +11,22 @@ import { getMonthlyUsageCount, getUsageSummary } from "@/server/services/ai-usag
  * subscription row (shouldn't happen given workspace creation always
  * attaches one, but keeps this resilient).
  */
+const ENTITLED_STATUSES = new Set(["ACTIVE", "TRIALING", "PAST_DUE"]);
+
 export async function getWorkspacePlan(workspaceId: string) {
   const subscription = await db.subscription.findUnique({
     where: { workspaceId },
     include: { plan: true },
   });
-  if (subscription) return { subscription, plan: subscription.plan };
+
+  // A paused/canceled/expired subscription no longer grants its paid plan —
+  // the workspace falls back to Free entitlements until it's reactivated.
+  if (subscription && ENTITLED_STATUSES.has(subscription.status)) {
+    return { subscription, plan: subscription.plan };
+  }
 
   const plan = await getOrSyncPlan("FREE");
-  return { subscription: null, plan };
+  return { subscription, plan };
 }
 
 export async function getEntitlements(workspaceId: string) {
