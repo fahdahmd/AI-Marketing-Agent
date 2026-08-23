@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { BrandSwitcher } from "./brand-switcher";
+import { MobileNav } from "./mobile-nav";
 import { SignOutButton } from "@/app/app/sign-out-button";
 
 interface TopbarProps {
@@ -30,6 +31,7 @@ export function Topbar({ workspaces, activeWorkspaceId, brands, activeBrandId, u
   return (
     <header className="flex h-16 items-center justify-between gap-4 border-b bg-background px-4 md:px-6">
       <div className="flex items-center gap-2">
+        <MobileNav />
         <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
         <BrandSwitcher brands={brands} activeBrandId={activeBrandId} />
       </div>
