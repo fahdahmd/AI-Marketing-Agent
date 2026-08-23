@@ -1,23 +1,27 @@
 import "server-only";
-import type { SearchConsoleProvider, SearchConsoleSnapshotData } from "./analytics-provider";
+import { isGoogleOAuthConfigured, getValidAccessToken } from "@/google/oauth";
+import { fetchSearchConsoleDailyReport } from "@/google/api";
+import { db } from "@/lib/db";
+import type { GoogleConnectionLike, SearchConsoleProvider, SearchConsoleSnapshotData } from "./analytics-provider";
 
-/**
- * Google Search Console API. Requires GOOGLE_CLIENT_ID/SECRET plus a
- * completed OAuth flow and a verified property per brand — not wired up
- * yet in this MVP, so the factory falls back to the mock provider.
- */
+/** Google Search Console API. Requires a completed OAuth connection with a selected site, per brand. */
 export class RealSearchConsoleProvider implements SearchConsoleProvider {
   readonly name = "search_console";
 
   constructor() {
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    if (!isGoogleOAuthConfigured()) {
       throw new Error("Search Console is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.");
     }
   }
 
-  async fetchSnapshot(): Promise<SearchConsoleSnapshotData> {
-    throw new Error(
-      "Search Console OAuth connection has not been completed for this brand. Connect it from Integrations, or the app will keep using demo data."
-    );
+  async fetchSnapshot({ connection, date }: { connection?: GoogleConnectionLike | null; date: Date }): Promise<SearchConsoleSnapshotData> {
+    if (!connection || !connection.searchConsoleSiteUrl) {
+      throw new Error("No Search Console site connected for this brand yet.");
+    }
+
+    const fullConnection = await db.googleConnection.findUniqueOrThrow({ where: { id: connection.id } });
+    const accessToken = await getValidAccessToken(fullConnection);
+
+    return fetchSearchConsoleDailyReport(accessToken, connection.searchConsoleSiteUrl, date);
   }
 }

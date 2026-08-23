@@ -30,12 +30,21 @@ export interface SocialAnalyticsProvider {
   fetchSnapshot(params: { followerBaseline: number }): Promise<SocialSnapshotData>;
 }
 
+export interface GoogleConnectionLike {
+  id: string;
+  accessTokenEnc: string;
+  refreshTokenEnc: string | null;
+  tokenExpiresAt: Date | null;
+  gaPropertyId: string | null;
+  searchConsoleSiteUrl: string | null;
+}
+
 export interface GoogleAnalyticsProvider {
   readonly name: string;
-  fetchSnapshot(params: { website?: string | null }): Promise<WebAnalyticsSnapshotData>;
+  fetchSnapshot(params: { connection?: GoogleConnectionLike | null; date: Date }): Promise<WebAnalyticsSnapshotData>;
 }
 
 export interface SearchConsoleProvider {
   readonly name: string;
-  fetchSnapshot(params: { website?: string | null }): Promise<SearchConsoleSnapshotData>;
+  fetchSnapshot(params: { connection?: GoogleConnectionLike | null; date: Date }): Promise<SearchConsoleSnapshotData>;
 }

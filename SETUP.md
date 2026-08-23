@@ -147,7 +147,28 @@ Never commit real Paddle credentials. `.env` is gitignored.
 
 ## Google Analytics / Search Console setup (optional)
 
-By default, analytics use `MockAnalyticsProvider` (clearly labeled demo data). Setting `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` enables the real provider *classes*, but the OAuth connection flow per brand is not implemented in this MVP — see ARCHITECTURE.md limitations.
+By default, analytics use `MockAnalyticsProvider` (clearly labeled demo data). To connect real Google Analytics (GA4) and Search Console data per brand:
+
+1. **Create a Google Cloud project** at [console.cloud.google.com](https://console.cloud.google.com) (or reuse an existing one).
+2. **Enable APIs** — go to "APIs & Services" → "Library" and enable:
+   - Google Analytics Data API
+   - Google Analytics Admin API
+   - Search Console API
+3. **Configure the OAuth consent screen** ("APIs & Services" → "OAuth consent screen"). While your app is in "Testing" mode, add your own Google account as a test user, or publish the app if you want other users to connect.
+4. **Create an OAuth Client ID** ("APIs & Services" → "Credentials" → "Create Credentials" → "OAuth client ID", type "Web application"):
+   - **Authorized redirect URI:** `{APP_URL}/api/integrations/google/callback` — e.g. `http://localhost:3000/api/integrations/google/callback` for local dev. This must match `APP_URL` in your `.env` exactly.
+   - Copy the generated Client ID and Client Secret.
+5. **Set environment variables:**
+
+   ```bash
+   GOOGLE_CLIENT_ID=...
+   GOOGLE_CLIENT_SECRET=...
+   ```
+
+6. **Connect a brand** — go to `/app/integrations` in the app, click "Connect Google" under Google Analytics & Search Console, and sign in with an account that has access to the GA4 property and Search Console site you want to track. You'll be redirected back and can then pick the specific property and site from the dropdowns (fetched live via the Analytics Admin API and Search Console `sites.list`).
+7. **Sync** — click "Sync now" on the Analytics page, or just visit the dashboard (it auto-syncs once every 24h). Search Console data typically lags 2-3 days behind real-time, so recent days may show zeros until Google's own data catches up — this is normal Search Console behavior, not a bug.
+
+Tokens are stored per brand in the `GoogleConnection` table and refreshed automatically when they expire. Disconnecting removes the stored tokens.
 
 ## Troubleshooting
 

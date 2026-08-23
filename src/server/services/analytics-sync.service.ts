@@ -66,26 +66,33 @@ export async function syncSocialAnalytics(brandId: string) {
   return results;
 }
 
-export async function syncGoogleAnalytics(brandId: string, website?: string | null) {
+export async function syncGoogleAnalytics(brandId: string) {
   const provider = getGoogleAnalyticsProvider();
   const isMock = provider.name === "mock";
+  const connection = await db.googleConnection.findUnique({ where: { brandId } });
+
   try {
-    const data = await provider.fetchSnapshot({ website });
+    const data = await provider.fetchSnapshot({ connection, date: todayUtc() });
     return [await upsertSnapshot(brandId, "google_analytics", null, data, isMock)];
   } catch (error) {
     if (isMock) throw error;
-    // real provider not fully connected yet — fall back to mock so the dashboard stays populated
+    // no connection yet, or the real API call failed — fall back to mock so the dashboard stays populated
     const { MockGoogleAnalyticsProvider } = await import("@/analytics/providers/mock-analytics-provider");
     const data = await new MockGoogleAnalyticsProvider().fetchSnapshot();
     return [await upsertSnapshot(brandId, "google_analytics", null, data, true)];
   }
 }
 
-export async function syncSearchConsole(brandId: string, website?: string | null) {
+export async function syncSearchConsole(brandId: string) {
   const provider = getSearchConsoleProvider();
   const isMock = provider.name === "mock";
+  const connection = await db.googleConnection.findUnique({ where: { brandId } });
+
+  // Search Console data typically lags 2-3 days behind real-time.
+  const queryDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
   try {
-    const data = await provider.fetchSnapshot({ website });
+    const data = await provider.fetchSnapshot({ connection, date: queryDate });
     return [await upsertSnapshot(brandId, "search_console", null, data, isMock)];
   } catch (error) {
     if (isMock) throw error;
@@ -96,8 +103,8 @@ export async function syncSearchConsole(brandId: string, website?: string | null
 }
 
 export async function syncAllAnalytics(brandId: string, userId: string) {
-  const { brand } = await requireBrandAccess(brandId, userId);
+  await requireBrandAccess(brandId, userId);
   await syncSocialAnalytics(brandId);
-  await syncGoogleAnalytics(brandId, brand.website);
-  await syncSearchConsole(brandId, brand.website);
+  await syncGoogleAnalytics(brandId);
+  await syncSearchConsole(brandId);
 }

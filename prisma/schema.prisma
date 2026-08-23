@@ -109,15 +109,34 @@ model Brand {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products        Product[]
-  socialAccounts  SocialAccount[]
-  campaigns       Campaign[]
-  content         Content[]
-  seoProjects     SEOProject[]
-  analytics       AnalyticsSnapshot[]
-  recommendations Recommendation[]
+  products         Product[]
+  socialAccounts   SocialAccount[]
+  campaigns        Campaign[]
+  content          Content[]
+  seoProjects      SEOProject[]
+  analytics        AnalyticsSnapshot[]
+  recommendations  Recommendation[]
+  googleConnection GoogleConnection?
 
   @@index([workspaceId])
+}
+
+model GoogleConnection {
+  id      String @id @default(cuid())
+  brandId String @unique
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  accessTokenEnc  String
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+  scope           String?
+
+  // Selected after connecting — e.g. "properties/123456789" and "https://example.com/" or "sc-domain:example.com"
+  gaPropertyId         String?
+  searchConsoleSiteUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Product {
