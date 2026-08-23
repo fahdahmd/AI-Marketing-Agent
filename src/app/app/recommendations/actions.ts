@@ -31,7 +31,7 @@ export async function acceptRecommendationAction(recommendationId: string) {
 
   if (recommendation.type === "SEO_CONTENT") {
     const topic = (recommendation.evidence as { topic?: string })?.topic ?? "";
-    redirect(`/app/seo/content?recommendationId=${recommendationId}&topic=${encodeURIComponent(topic)}`);
+    redirect(`/app/seo/content/new?recommendationId=${recommendationId}&topic=${encodeURIComponent(topic)}`);
   }
 
   redirect(`/app/campaigns/new?recommendationId=${recommendationId}`);
