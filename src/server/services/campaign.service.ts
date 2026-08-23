@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireBrandAccess, requireCampaignAccess } from "@/server/auth/authorize";
 import { logAudit } from "@/server/services/audit-log.service";
 import { createNotification } from "@/server/services/notification.service";
+import { completeRecommendation } from "@/server/services/recommendation.service";
 import { generateCampaign } from "@/ai/services/campaign-generation.service";
 
 export const campaignInputSchema = z.object({
@@ -52,7 +53,7 @@ export async function getCampaignForUser(campaignId: string, userId: string) {
  * the review workflow simple. Scheduled publishing and analytics sync
  * (src/jobs) use a real queue since those are genuinely time-deferred.
  */
-export async function createCampaignAndGenerate(brandId: string, userId: string, input: CampaignInput) {
+export async function createCampaignAndGenerate(brandId: string, userId: string, input: CampaignInput, recommendationId?: string) {
   const { brand } = await requireBrandAccess(brandId, userId);
   const data = campaignInputSchema.parse(input);
 
@@ -68,10 +69,15 @@ export async function createCampaignAndGenerate(brandId: string, userId: string,
       tone: data.tone || null,
       platforms: data.platforms,
       status: "DRAFT",
+      recommendationId: recommendationId || null,
     },
   });
 
   await logAudit({ workspaceId: brand.workspaceId, userId, action: "campaign.created", entityType: "Campaign", entityId: campaign.id, metadata: { name: campaign.name } });
+
+  if (recommendationId) {
+    await completeRecommendation(recommendationId);
+  }
 
   await generateCampaign(campaign.id);
 

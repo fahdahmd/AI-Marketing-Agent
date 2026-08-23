@@ -34,9 +34,11 @@ export async function createCampaignAction(_prevState: FormState, formData: Form
     return { error: parsed.error.errors[0]?.message ?? "Please check the form and try again." };
   }
 
+  const recommendationId = String(formData.get("recommendationId") ?? "") || undefined;
+
   let campaignId: string;
   try {
-    const campaign = await createCampaignAndGenerate(brand.id, userId, parsed.data);
+    const campaign = await createCampaignAndGenerate(brand.id, userId, parsed.data, recommendationId);
     campaignId = campaign.id;
   } catch (error) {
     if (error instanceof AppError) return { error: error.message };

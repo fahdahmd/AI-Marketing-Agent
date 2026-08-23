@@ -46,18 +46,25 @@ function SubmitButton() {
   );
 }
 
-export function CampaignForm({ products }: { products: { id: string; name: string }[] }) {
+export function CampaignForm({
+  products,
+  prefill,
+}: {
+  products: { id: string; name: string }[];
+  prefill?: { name?: string; productId?: string; idea?: string; recommendationId?: string };
+}) {
   const [state, formAction] = useFormState<FormState, FormData>(createCampaignAction, {});
   const [promotionType, setPromotionType] = useState("PRODUCT");
   const [platforms, setPlatforms] = useState<string[]>(["INSTAGRAM", "FACEBOOK"]);
 
   return (
     <form action={formAction} className="space-y-8">
+      {prefill?.recommendationId && <input type="hidden" name="recommendationId" value={prefill.recommendationId} />}
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground">What are you promoting?</h2>
         <div className="space-y-2">
           <Label htmlFor="name">Campaign name</Label>
-          <Input id="name" name="name" placeholder="Summer launch push" required />
+          <Input id="name" name="name" placeholder="Summer launch push" defaultValue={prefill?.name} required />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -78,7 +85,7 @@ export function CampaignForm({ products }: { products: { id: string; name: strin
           {promotionType === "PRODUCT" && (
             <div className="space-y-2">
               <Label htmlFor="productId">Product</Label>
-              <Select name="productId">
+              <Select name="productId" defaultValue={prefill?.productId}>
                 <SelectTrigger id="productId">
                   <SelectValue placeholder="Select a product" />
                 </SelectTrigger>
@@ -122,6 +129,7 @@ export function CampaignForm({ products }: { products: { id: string; name: strin
             name="idea"
             rows={4}
             required
+            defaultValue={prefill?.idea}
             placeholder="Create an energetic advertisement for our new fitness bottle. Emphasize that it keeps water cold for 24 hours."
           />
         </div>
