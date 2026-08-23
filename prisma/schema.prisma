@@ -1,0 +1,726 @@
+// AI Marketing Agent — Prisma schema
+// Multi-tenant hierarchy: User -> WorkspaceMember -> Workspace -> Brand -> (Products, SocialAccounts, Campaigns, Content, Analytics, SEO, Recommendations)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// Auth / Tenancy
+// ------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships   WorkspaceMember[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@index([email])
+}
+
+enum WorkspaceRole {
+  OWNER
+  MEMBER
+}
+
+model Workspace {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members       WorkspaceMember[]
+  brands        Brand[]
+  subscription  Subscription?
+  aiUsage       AIUsage[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  paddleEvents  PaddleEvent[]
+
+  @@index([slug])
+}
+
+model WorkspaceMember {
+  id     String        @id @default(cuid())
+  role   WorkspaceRole @default(MEMBER)
+  userId String
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+// ------------------------------------------------------------------
+// Brand / Product
+// ------------------------------------------------------------------
+
+enum BrandVoice {
+  PROFESSIONAL
+  FRIENDLY
+  BOLD
+  EDUCATIONAL
+  FUNNY
+  LUXURY
+  CASUAL
+}
+
+model Brand {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name             String
+  website          String?
+  industry         String?
+  description      String?
+  targetAudience   String?
+  voice            BrandVoice @default(PROFESSIONAL)
+  customVoiceNotes String?
+  marketingGoals   String[]   @default([])
+  competitors      String[]   @default([])
+  logoUrl          String?
+  primaryColor     String?
+  secondaryColor   String?
+
+  onboardingCompletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products        Product[]
+  socialAccounts  SocialAccount[]
+  campaigns       Campaign[]
+  content         Content[]
+  seoProjects     SEOProject[]
+  analytics       AnalyticsSnapshot[]
+  recommendations Recommendation[]
+
+  @@index([workspaceId])
+}
+
+model Product {
+  id      String @id @default(cuid())
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  name           String
+  description    String?
+  price          Decimal? @db.Decimal(12, 2)
+  currency       String   @default("USD")
+  productUrl     String?
+  features       String[] @default([])
+  benefits       String[] @default([])
+  targetAudience String?
+  keywords       String[] @default([])
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images    ProductImage[]
+  campaigns Campaign[]
+
+  @@index([brandId])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  url       String
+  alt       String?
+  isPrimary Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+// ------------------------------------------------------------------
+// Social accounts
+// ------------------------------------------------------------------
+
+enum Platform {
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  X
+}
+
+enum SocialAccountStatus {
+  CONNECTED
+  DISCONNECTED
+  EXPIRED
+  ERROR
+}
+
+model SocialAccount {
+  id      String @id @default(cuid())
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  platform          Platform
+  status            SocialAccountStatus @default(CONNECTED)
+  externalAccountId String
+  displayName       String?
+  handle            String?
+  avatarUrl         String?
+  isMock            Boolean             @default(true)
+
+  // OAuth tokens are stored server-side only and never sent to the client.
+  accessTokenEnc  String?
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scheduledPosts  ScheduledPost[]
+  publishedPosts  PublishedPost[]
+  analyticsEvents AnalyticsSnapshot[]
+
+  @@unique([brandId, platform, externalAccountId])
+  @@index([brandId])
+}
+
+// ------------------------------------------------------------------
+// Campaigns / Content
+// ------------------------------------------------------------------
+
+enum CampaignPromotionType {
+  PRODUCT
+  SERVICE
+  BRAND
+  WEBSITE
+  CUSTOM
+}
+
+enum CampaignObjective {
+  AWARENESS
+  ENGAGEMENT
+  WEBSITE_TRAFFIC
+  LEADS
+  SALES
+  PRODUCT_LAUNCH
+  PROMOTION
+  RETARGETING
+}
+
+enum CampaignStatus {
+  DRAFT
+  GENERATING
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model Campaign {
+  id      String @id @default(cuid())
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  name           String
+  promotionType  CampaignPromotionType
+  objective      CampaignObjective
+  idea           String
+  targetAudience String?
+  tone           String?
+  platforms      Platform[]
+  status         CampaignStatus        @default(DRAFT)
+
+  concept            String?
+  mainMessage        String?
+  headline           String?
+  cta                String?
+  creativeDirection  String?
+  publishingStrategy String?
+
+  recommendationId String?         @unique
+  recommendation   Recommendation? @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  content Content[]
+
+  @@index([brandId])
+  @@index([productId])
+}
+
+enum ContentStatus {
+  DRAFT
+  GENERATING
+  READY_FOR_REVIEW
+  APPROVED
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  REJECTED
+}
+
+model Content {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  platform Platform
+  status   ContentStatus @default(DRAFT)
+
+  headline String?
+  hook     String?
+  caption  String?
+  body     String?
+  cta      String?
+  hashtags String[] @default([])
+
+  imagePrompt String?
+  imageUrl    String?
+
+  rejectionReason  String?
+  approvedAt       DateTime?
+  approvedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants       ContentVariant[]
+  scheduledPosts ScheduledPost[]
+  publishedPosts PublishedPost[]
+
+  @@index([campaignId])
+  @@index([brandId])
+  @@index([status])
+}
+
+model ContentVariant {
+  id        String  @id @default(cuid())
+  contentId String
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  label       String // e.g. "v1", "regeneration-2"
+  headline    String?
+  caption     String?
+  body        String?
+  cta         String?
+  hashtags    String[] @default([])
+  imageUrl    String?
+  imagePrompt String?
+  isSelected  Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([contentId])
+}
+
+enum ScheduledPostStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+  CANCELED
+}
+
+model ScheduledPost {
+  id        String  @id @default(cuid())
+  contentId String
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  socialAccountId String
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  scheduledFor DateTime
+  status       ScheduledPostStatus @default(PENDING)
+  attempts     Int                 @default(0)
+  lastError    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  publishedPost PublishedPost?
+
+  @@index([contentId])
+  @@index([socialAccountId])
+  @@index([status, scheduledFor])
+}
+
+model PublishedPost {
+  id        String  @id @default(cuid())
+  contentId String
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  socialAccountId String
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  scheduledPostId String?        @unique
+  scheduledPost   ScheduledPost? @relation(fields: [scheduledPostId], references: [id], onDelete: SetNull)
+
+  externalPostId String
+  externalUrl    String?
+  publishedAt    DateTime @default(now())
+
+  reach          Int   @default(0)
+  impressions    Int   @default(0)
+  likes          Int   @default(0)
+  comments       Int   @default(0)
+  shares         Int   @default(0)
+  clicks         Int   @default(0)
+  engagementRate Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contentId])
+  @@index([socialAccountId])
+}
+
+// ------------------------------------------------------------------
+// SEO
+// ------------------------------------------------------------------
+
+model SEOProject {
+  id      String @id @default(cuid())
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  name String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  keywords SEOKeyword[]
+  content  SEOContent[]
+
+  @@index([brandId])
+}
+
+model SEOKeyword {
+  id        String     @id @default(cuid())
+  projectId String
+  project   SEOProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  keyword      String
+  type         String // "related" | "long-tail"
+  searchIntent String?
+  cluster      String?
+  source       String  @default("AI_GENERATED") // AI_GENERATED | VERIFIED
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model SEOContent {
+  id        String     @id @default(cuid())
+  projectId String
+  project   SEOProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  brandId String
+
+  type              String // article | product_description | landing_page | faq
+  primaryKeyword    String
+  secondaryKeywords String[] @default([])
+  searchIntent      String?
+  seoTitle          String?
+  metaTitle         String?
+  metaDescription   String?
+  outline           Json?
+  article           String?
+  faq               Json?
+  internalLinks     Json?
+
+  seoScore Int? // 0-100 internal AI content score, not a ranking guarantee
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+// ------------------------------------------------------------------
+// Analytics
+// ------------------------------------------------------------------
+
+model AnalyticsSnapshot {
+  id      String @id @default(cuid())
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  socialAccountId String?
+  socialAccount   SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+
+  source String // "social" | "google_analytics" | "search_console"
+  date   DateTime @db.Date
+
+  reach          Int   @default(0)
+  impressions    Int   @default(0)
+  engagement     Int   @default(0)
+  engagementRate Float @default(0)
+  followers      Int   @default(0)
+  websiteVisits  Int   @default(0)
+  leads          Int   @default(0)
+  conversions    Int   @default(0)
+
+  organicClicks      Int   @default(0)
+  organicImpressions Int   @default(0)
+  ctr                Float @default(0)
+  avgPosition        Float @default(0)
+
+  isMock Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([brandId, date])
+  @@index([source, date])
+}
+
+// ------------------------------------------------------------------
+// Recommendations
+// ------------------------------------------------------------------
+
+enum RecommendationType {
+  PROMOTE_PRODUCT
+  SEO_CONTENT
+  REPURPOSE_CONTENT
+  CAMPAIGN_IDEA
+  CONNECT_SOCIAL_ACCOUNT
+  GENERAL
+}
+
+enum RecommendationPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum RecommendationStatus {
+  NEW
+  VIEWED
+  ACCEPTED
+  DISMISSED
+  COMPLETED
+}
+
+model Recommendation {
+  id      String @id @default(cuid())
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  type           RecommendationType
+  title          String
+  explanation    String
+  evidence       Json
+  priority       RecommendationPriority @default(MEDIUM)
+  expectedImpact String?
+  action         String
+  status         RecommendationStatus   @default(NEW)
+
+  sourceProductId String?
+  sourceContentId String?
+
+  viewedAt    DateTime?
+  acceptedAt  DateTime?
+  dismissedAt DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaign Campaign?
+
+  @@index([brandId, status])
+}
+
+// ------------------------------------------------------------------
+// AI usage / credits
+// ------------------------------------------------------------------
+
+enum AIUsageType {
+  TEXT_GENERATION
+  IMAGE_GENERATION
+  SEO_GENERATION
+  RECOMMENDATION_GENERATION
+}
+
+model AIUsage {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  type             AIUsageType
+  provider         String
+  model            String?
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  estimatedCostUsd Decimal?    @db.Decimal(10, 5)
+  creditsConsumed  Int         @default(0)
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, type])
+}
+
+// ------------------------------------------------------------------
+// Notifications / audit log
+// ------------------------------------------------------------------
+
+model Notification {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    String
+  title   String
+  message String
+  href    String?
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId, readAt])
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+}
+
+// ------------------------------------------------------------------
+// Billing / Paddle
+// ------------------------------------------------------------------
+
+enum PlanKey {
+  FREE
+  STARTER
+  GROWTH
+  PRO
+  AGENCY
+}
+
+model Plan {
+  id  String  @id @default(cuid())
+  key PlanKey @unique
+
+  name          String
+  priceMonthly  Int // cents
+  paddlePriceId String?
+
+  aiPostsPerMonth  Int
+  aiImagesPerMonth Int
+  seoGenPerMonth   Int
+  socialAccounts   Int
+  teamMembers      Int
+  brands           Int
+
+  hasScheduling        Boolean @default(false)
+  hasAdvancedAnalytics Boolean @default(false)
+  hasAIRecommendations Boolean @default(false)
+  hasSEOAnalytics      Boolean @default(false)
+  hasApprovalWorkflows Boolean @default(false)
+  hasWhiteLabel        Boolean @default(false)
+  hasPrioritySupport   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  PAUSED
+  CANCELED
+  EXPIRED
+}
+
+model Subscription {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  planId String
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  status SubscriptionStatus @default(ACTIVE)
+
+  paddleCustomerId     String?
+  paddleSubscriptionId String? @unique
+  paddlePriceId        String?
+
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([paddleSubscriptionId])
+}
+
+model PaddleEvent {
+  id          String     @id @default(cuid())
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  paddleEventId String    @unique
+  eventType     String
+  payload       Json
+  processedAt   DateTime?
+  error         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([eventType])
+}
